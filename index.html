@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Architecture Sandbox: CLI-to-GUI Recovery Wizard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-env: #080A0F;
+            --bg-surface: #0F131A;
+            --bg-node: #161B24;
+            --border: #242C3D;
+            --text-main: #F1F5F9;
+            --text-muted: #64748B;
+            --accent: #38BDF8;
+            --accent-warning: #F59E0B;
+            --accent-danger: #EF4444;
+            --font-sans: 'Plus Jakarta Sans', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: var(--bg-env);
+            color: var(--text-main);
+            font-family: var(--font-sans);
+            padding: 2rem;
+            line-height: 1.5;
+        }
+
+        .framework-shell {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 340px 1fr;
+            gap: 2rem;
+        }
+
+        /* --- SIDEBAR DOCUMENTATION --- */
+        .panel-docs {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            height: fit-content;
+        }
+
+        .panel-title {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 1rem;
+        }
+
+        h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: 1rem; letter-spacing: -0.5px; }
+        p { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1.25rem; }
+
+        /* --- PROGRESSIVE STEP TRACKER --- */
+        .step-indicator-list {
+            list-style: none;
+            margin-top: 1.5rem;
+        }
+
+        .step-item {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .step-item.active { color: var(--accent); font-weight: 500; }
+        .step-item.completed { color: var(--text-main); }
+        .step-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border); }
+        .step-item.active .step-dot { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+        .step-item.completed .step-dot { background: var(--text-main); }
+
+        /* --- WIZARD WORKSPACE --- */
+        .panel-runtime {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .wizard-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 2.5rem;
+            min-height: 420px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .wizard-body { flex-grow: 1; margin-bottom: 2rem; }
+        
+        .wizard-step-pane { display: none; }
+        .wizard-step-pane.active { display: block; }
+
+        .pane-title { font-size: 1.2rem; font-weight: 600; margin-bottom: 0.5rem; }
+        .pane-subtitle { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem; }
+
+        /* Form Layout Elements */
+        .input-group { margin-bottom: 1.25rem; }
+        .input-label { display: block; font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem; text-transform: uppercase; }
+        
+        .select-field, .text-field {
+            width: 100%;
+            background: var(--bg-env);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 0.75rem;
+            color: var(--text-main);
+            font-family: var(--font-sans);
+            font-size: 0.95rem;
+            outline: none;
+        }
+        .select-field:focus, .text-field:focus { border-color: var(--accent); }
+
+        /* Warning Banner Guardrail */
+        .guardrail-banner {
+            background: rgba(239, 68, 68, 0.08);
+            border: 1px dashed var(--accent-danger);
+            border-radius: 6px;
+            padding: 1rem;
+            margin-top: 1.5rem;
+            display: none;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+        .guardrail-banner.visible { display: flex; }
+        .banner-icon { color: var(--accent-danger); font-family: var(--font-mono); font-weight: bold; font-size: 0.9rem; }
+        .banner-text { font-size: 0.85rem; color: var(--text-main); }
+
+        /* Checkbox Multi-Grid Setup */
+        .checkbox-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
+        .checkbox-tile {
+            background: var(--bg-node);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+        .checkbox-tile input { accent-color: var(--accent); }
+
+        /* Navigation Button Bars */
+        .wizard-footer {
+            display: flex;
+            justify-content: space-between;
+            border-top: 1px solid var(--border);
+            padding-top: 1.5rem;
+        }
+
+        .btn-nav {
+            background: var(--bg-node);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 0.6rem 1.2rem;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn-nav:hover:not(:disabled) { border-color: var(--accent); }
+        .btn-nav:disabled { opacity: 0.3; cursor: not-allowed; }
+        .btn-nav.primary-action { background: var(--accent); color: var(--bg-env); border-color: var(--accent); font-weight: 500; }
+        .btn-nav.primary-action:hover:not(:disabled) { background: transparent; color: var(--accent); }
+
+        /* Live CLI Real-time Simulation Feed */
+        .cli-preview-box {
+            background: #040609;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 1rem;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: #34D399;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="framework-shell">
+        
+        <aside class="panel-docs">
+            <div class="panel-title">Defensive Engineering</div>
+            <h1>Recovery Wizard</h1>
+            <p>Translates volatile terminal engine parameters into safe, progressively disclosed graphical components to minimise operational risks.</p>
+            
+            <ul class="step-indicator-list">
+                <li class="step-item active" id="indicator-1"><span class="step-dot"></span>01 // Source Allocation</li>
+                <li class="step-item" id="indicator-2"><span class="step-dot"></span>02 // Extension Filter</li>
+                <li class="step-item" id="indicator-3"><span class="step-dot"></span>03 // Target Verification</li>
+                <li class="step-item" id="indicator-4"><span class="step-dot"></span>04 // Execution Thread</li>
+            </ul>
+        </aside>
+
+        <section class="panel-runtime">
+            
+            <div class="wizard-card">
+                <div class="wizard-body">
+                    
+                    <div class="wizard-step-pane active" id="pane-1">
+                        <div class="pane-title">Select Affected Target Storage Volume</div>
+                        <div class="pane-subtitle">Identify the raw block volume storage cluster containing the lost data maps.</div>
+                        
+                        <div class="input-group">
+                            <label class="input-label">Detected Hardware Volumes</label>
+                            <select class="select-field" id="source-drive-field" onchange="runLiveGuardrailValidation()">
+                                <option value="/dev/sdb1">External Hardware Storage Array Array [500GB // NTFS]</option>
+                                <option value="/dev/sda1">Internal System Mount [/dev/sda1 // EXT4]</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="wizard-step-pane" id="pane-2">
+                        <div class="pane-title">Filter Specific File Signatures</div>
+                        <div class="pane-subtitle">Restricting targeted signature arrays significantly accelerates internal sector search calculations.</div>
+                        
+                        <div class="checkbox-grid">
+                            <label class="checkbox-tile"><input type="checkbox" checked> <span>RAW Images (.cr2, .nef)</span></label>
+                            <label class="checkbox-tile"><input type="checkbox" checked> <span>Standard Media (.png, .jpg)</span></label>
+                            <label class="checkbox-tile"><input type="checkbox"> <span>Compressed Archives (.zip, .tar)</span></label>
+                            <label class="checkbox-tile"><input type="checkbox"> <span>Document Clusters (.pdf, .docx)</span></label>
+                        </div>
+                    </div>
+
+                    <div class="wizard-step-pane" id="pane-3">
+                        <div class="pane-title">Establish Extraction Output Destination Path</div>
+                        <div class="pane-subtitle">The output target directory MUST exist completely outside the affected data sector blocks.</div>
+                        
+                        <div class="input-group">
+                            <label class="input-label">Extraction Target Path Mount String</label>
+                            <input type="text" class="text-field" id="target-path-field" value="/home/operator/recovered_payloads" oninput="runLiveGuardrailValidation()">
+                        </div>
+
+                        <div class="guardrail-banner" id="validation-error-banner">
+                            <div class="banner-icon">⚠</div>
+                            <div class="banner-text">
+                                <strong>CRITICAL OVERWRITE EXCEPTION TRIGGERED:</strong><br>
+                                Your destination matches the source volume directory. Restoring cluster data directly onto a failing partition rewrites lost raw blocks, causing permanent sector destruction. Execution locked.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="wizard-step-pane" id="pane-4">
+                        <div class="pane-title">Ready to Initialise File System Extraction Engine</div>
+                        <div class="pane-subtitle">The interface has translated your structural parameters into clean, isolated low-level runtime engine parameters safely.</div>
+                        
+                        <div class="cli-preview-box">
+                            <span style="color: var(--text-muted);"># Background Engine Build Pipeline String Out:</span><br>
+                            <span id="cli-command-string">photorec /cmd /dev/sdb1 search</span>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="wizard-footer">
+                    <button class="btn-nav" id="btn-back" onclick="navigateStep(-1)" disabled>Backwards</button>
+                    <button class="btn-nav primary-action" id="btn-next" onclick="navigateStep(1)">Continue Step</button>
+                </div>
+            </div>
+
+        </section>
+    </div>
+
+    <script>
+        let currentStep = 1;
+        const totalSteps = 4;
+
+        function navigateStep(direction) {
+            // Deactivate current active layouts
+            document.getElementById(`pane-${currentStep}`).classList.remove('active');
+            document.getElementById(`indicator-${currentStep}`).classList.remove('active');
+            if (direction > 0) document.getElementById(`indicator-${currentStep}`).classList.add('completed');
+
+            // Increment wizard index boundaries safely
+            currentStep += direction;
+
+            // Activate new target frame nodes
+            document.getElementById(`pane-${currentStep}`).classList.add('active');
+            document.getElementById(`indicator-${currentStep}`).classList.add('active');
+            document.getElementById(`indicator-${currentStep}`).classList.remove('completed');
+
+            // Synchronize control panel switches
+            document.getElementById('btn-back').disabled = (currentStep === 1);
+            
+            if (currentStep === totalSteps) {
+                document.getElementById('btn-next').innerText = "Execute Scan Engine";
+                document.getElementById('btn-next').classList.add('execute-alert');
+                compileBackgroundCLIString();
+            } else {
+                document.getElementById('btn-next').innerText = "Continue Step";
+                document.getElementById('btn-next').classList.remove('execute-alert');
+            }
+
+            // Run validation tracking filters immediately on view changes
+            runLiveGuardrailValidation();
+        }
+
+        // Essential Hard Software Architecture Validation Rules Engine
+        function runLiveGuardrailValidation() {
+            const sourceVolume = document.getElementById('source-drive-field').value;
+            const targetPath = document.getElementById('target-path-field').value.trim();
+            
+            const nextButton = document.getElementById('btn-next');
+            const errorBanner = document.getElementById('validation-error-banner');
+
+            // Check if the user is accidentally writing back into the exact same file node
+            if (targetPath.includes(sourceVolume)) {
+                errorBanner.classList.add('visible');
+                nextButton.disabled = true;
+            } else {
+                errorBanner.classList.remove('visible');
+                nextButton.disabled = false;
+            }
+        }
+
+        // Structural Parameter Formatting Module (Compiling state back down to raw string outputs)
+        function compileBackgroundCLIString() {
+            const sourceVolume = document.getElementById('source-drive-field').value;
+            const targetPath = document.getElementById('target-path-field').value;
+            
+            // Simulating how clean layouts generate backend engine commands flawlessly behind the scenes
+            document.getElementById('cli-command-string').innerText = `photorec /cmd ${sourceVolume} search /destination=${targetPath} --options=mode_ext2_paranoid,skip_corrupt_clusters`;
+        }
+    </script>
+</body>
+</html>
